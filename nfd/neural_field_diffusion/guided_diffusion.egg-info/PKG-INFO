@@ -1,11 +1,9 @@
-Metadata-Version: 2.1
+Metadata-Version: 2.4
 Name: guided-diffusion
 Version: 0.0.0
-Summary: UNKNOWN
-Home-page: UNKNOWN
-License: UNKNOWN
-Platform: UNKNOWN
 License-File: LICENSE
-
-UNKNOWN
-
+Requires-Dist: blobfile>=1.0.5
+Requires-Dist: torch
+Requires-Dist: tqdm
+Dynamic: license-file
+Dynamic: requires-dist

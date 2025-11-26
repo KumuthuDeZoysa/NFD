@@ -8,11 +8,13 @@ Will output triplanes as .npy files and meshes as .ply files.
 
 import neural_field_diffusion.scripts.image_sample as image_sample
 import triplane_decoder.visualize as visualize
+import mesh_to_pointcloud as m2pc
 import argparse
 from argparse import Namespace
 import numpy as np
 from tqdm import tqdm
 import os
+import matplotlib.pyplot as plt
 
 
 
@@ -36,6 +38,12 @@ def main():
                     help='Number of steps to take in deniosing process.', required=False)
     parser.add_argument('--shape_resolution', type=int, default=128,
                     help='Resolution at which to decode shapes.', required=False)
+    parser.add_argument('--generate_pointclouds', action='store_true',
+                    help='Generate point cloud dataset from meshes')
+    parser.add_argument('--pc_num_points', type=int, default=2048,
+                    help='Number of points per cloud (default: 2048, standard for PointNet)')
+    parser.add_argument('--pc_variants', type=int, default=5,
+                    help='Number of variants per mesh (with different noise/occlusion)')
 
     args = parser.parse_args()
 
@@ -56,10 +64,27 @@ def main():
     os.makedirs(f'{args.save_dir}/triplanes', exist_ok=True)
 
     samples = np.transpose(samples, [0, 3, 1, 2])
+    
+    os.makedirs(f'{args.save_dir}/triplane_images', exist_ok=True)
+
     for idx, triplane in enumerate(samples):
         save_path = f'{args.save_dir}/triplanes/{idx}.npy'
         print(f'saving to {save_path}...')
         np.save(save_path, triplane)
+
+        # Save triplane images
+        reshaped_triplane = triplane.reshape(3, 32, 128, 128)
+        for plane_idx in range(3):
+            # Take first 3 channels for RGB visualization
+            plane_img = reshaped_triplane[plane_idx, :3, :, :] # (3, 128, 128)
+            plane_img = np.transpose(plane_img, (1, 2, 0)) # (128, 128, 3)
+            
+            # Normalize to [0, 1]
+            plane_img = (plane_img - plane_img.min()) / (plane_img.max() - plane_img.min() + 1e-8)
+            
+            image_save_path = f'{args.save_dir}/triplane_images/{idx}_plane_{plane_idx}.png'
+            plt.imsave(image_save_path, plane_img)
+
     os.system(f'rm {args.save_dir}/*.npz')
     
     # Decode triplane samples
@@ -73,7 +98,38 @@ def main():
         )
         visualize.main(args=decoder_args)  # Run decoder
 
-    print('Done!')
+    # Generate point clouds from meshes (optional)
+    if args.generate_pointclouds:
+        print('\nConverting meshes to point clouds...')
+        os.makedirs(f'{args.save_dir}/pointclouds', exist_ok=True)
+        
+        successful = 0
+        failed = 0
+        
+        for idx in range(len(samples)):
+            mesh_path = f'{args.save_dir}/objects/{idx}.obj'
+            pc_output_dir = f'{args.save_dir}/pointclouds/object_{idx}'
+            
+            result = m2pc.process_mesh_to_dataset(
+                mesh_path=mesh_path,
+                output_dir=pc_output_dir,
+                num_points=args.pc_num_points,
+                num_variants=args.pc_variants,
+                add_noise=True,
+                generate_partial=True
+            )
+            
+            if result:
+                successful += 1
+            else:
+                failed += 1
+        
+        print(f'\nPoint cloud generation complete!')
+        print(f'  Successfully processed: {successful}/{len(samples)} meshes')
+        if failed > 0:
+            print(f'  Failed: {failed}/{len(samples)} meshes')
+
+    print('\nDone!')
     
 
 

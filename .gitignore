@@ -1,5 +1,2 @@
-
-samples
-*.npy
-*.ply
-nfd/models
+nfd/cars
+nfd/nfd.egg-info
